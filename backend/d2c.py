@@ -159,99 +159,8 @@ def get_networks():
 
 
 def group_containers_by_network(containers, networks):
-
-    """根据网络关系对容器进行分组"""
-    # 初始化网络分组
-    network_groups = defaultdict(list)
-    container_to_networks = defaultdict(list)
-    container_links = defaultdict(list)
-    special_network_containers = []
-    
-    # 记录每个容器所属的网络
-    for container in containers:
-        container_id = container['Id']
-        container_name = container['Name'].lstrip('/')
-        
-        # 检查网络模式
-        network_mode = container.get('HostConfig', {}).get('NetworkMode', '')
-        
-        # 检查是否使用特殊网络（bridge、host）
-        # macvlan网络不再作为特殊网络处理，允许正常分组
-        is_special_network = network_mode in ['bridge', 'host']
-        
-        if is_special_network:
-            special_network_containers.append(container_id)
-            continue
-            
-        # 处理网络连接
-        for network_name, network_config in container.get('NetworkSettings', {}).get('Networks', {}).items():
-            # 排除默认的bridge和host网络
-            if network_name not in ['bridge', 'host', 'none']:
-                container_to_networks[container_id].append(network_name)
-                network_groups[network_name].append(container_id)
-        
-        # 处理容器链接
-        for link in container.get('HostConfig', {}).get('Links', []) or []:
-            linked_container = link.split(':')[0].lstrip('/')
-            container_links[container_id].append(linked_container)
-    
-    # 合并有链接关系的容器组
-    merged_groups = []
-    processed_networks = set()
-    
-    # 首先基于自定义网络分组
-    for network_name, container_ids in network_groups.items():
-        if network_name in processed_networks:
-            continue
-            
-        group = set(container_ids)
-        processed_networks.add(network_name)
-        
-        # 查找与当前网络有重叠容器的其他网络
-        for other_network, other_containers in network_groups.items():
-            if other_network != network_name and not other_network in processed_networks:
-                if any(c in group for c in other_containers):
-                    group.update(other_containers)
-                    processed_networks.add(other_network)
-        
-        merged_groups.append(list(group))
-    
-    # 处理通过links连接但没有共享自定义网络的容器
-    for container_id, linked_containers in container_links.items():
-        if not any(container_id in group for group in merged_groups):
-            # 查找所有链接的容器
-            linked_group = {container_id}
-            for linked in linked_containers:
-                for c in containers:
-                    if c['Name'].lstrip('/') == linked:
-                        linked_group.add(c['Id'])
-            
-            # 检查是否可以合并到现有组
-            merged = False
-            for i, group in enumerate(merged_groups):
-                if any(c in group for c in linked_group):
-                    merged_groups[i] = list(set(group).union(linked_group))
-                    merged = True
-                    break
-            
-            if not merged:
-                merged_groups.append(list(linked_group))
-    
-    # 处理剩余的独立容器
-    standalone_containers = []
-    for container in containers:
-        container_id = container['Id']
-        if not any(container_id in group for group in merged_groups) and container_id not in special_network_containers:
-            standalone_containers.append(container_id)
-    
-    if standalone_containers:
-        merged_groups.append(standalone_containers)
-    
-    # 为每个bridge、host或macvlan网络的容器创建单独的组
-    for container_id in special_network_containers:
-        merged_groups.append([container_id])
-    
-    return merged_groups
+    """每个容器独立一个 compose 文件"""
+    return [[c['Id']] for c in containers]
 
 
 def convert_container_to_service(container):
@@ -850,7 +759,7 @@ def generate_compose_for_selected_containers(container_ids):
     return compose
 
 
-def main():
+def 主干():
     # 确保配置文件存在
     ensure_config_file()
     
@@ -887,4 +796,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    主干()
